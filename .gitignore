@@ -1,0 +1,7 @@
+venv/
+input_videos/
+output_videos/
+stats/
+__pycache__/
+*.pt
+.DS_Store
