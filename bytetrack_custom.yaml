@@ -1,0 +1,12 @@
+# Custom ByteTrack settings — same defaults as Ultralytics' bytetrack.yaml,
+# except track_buffer is increased so a player who's briefly occluded or
+# blurred keeps their same ID for longer, instead of being assigned a new
+# one (which was causing team-color flicker, since a "new" ID re-triggers
+# classification from scratch).
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 90       # default is 30 — tripled to survive longer occlusions
+match_thresh: 0.8
+fuse_score: True
