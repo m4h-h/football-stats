@@ -1,6 +1,7 @@
 venv/
 input_videos/
 output_videos/
+runs/
 stats/
 __pycache__/
 *.pt

@@ -86,12 +86,16 @@ class TeamAssigner:
         if vec is not None:
             self._color_pool[player_track_id] = vec
 
-    def try_finalize_teams(self, frame_num):
+    def try_finalize_teams(self, frame_num, fallback_at=FALLBACK_FRAME_LIMIT):
+        """fallback_at lets the caller shorten the deadline for a short clip —
+        on a 2-minute test clip, waiting 300 frames to see 8 distinct players
+        can mean the video ends before teams are ever decided, which produces
+        no possession data at all."""
         if self._kmeans is not None:
             return True
 
         have_enough = len(self._color_pool) >= MIN_UNIQUE_PLAYERS_TO_INIT
-        past_deadline = frame_num >= FALLBACK_FRAME_LIMIT and len(self._color_pool) >= 2
+        past_deadline = frame_num >= fallback_at and len(self._color_pool) >= 2
         if not (have_enough or past_deadline):
             return False
 
@@ -103,6 +107,27 @@ class TeamAssigner:
         self.team_hue_vectors[2] = km.cluster_centers_[1]
         print(f"Team colors finalized at frame {frame_num} using {len(vectors)} unique player samples.")
         return True
+
+    def team_color_bgr(self, team, fallback=(200, 200, 200)):
+        """The team's actual kit colour, recovered from its clustered hue.
+        Cluster order is arbitrary — team 1 isn't necessarily the red one —
+        so anything that labels or draws a team should use this rather than
+        assuming a fixed colour."""
+        vec = self.team_hue_vectors.get(team)
+        if vec is None:
+            return fallback
+        angle_deg = np.degrees(np.arctan2(vec[1], vec[0])) % 360
+        hue = np.uint8(angle_deg / 2)  # back to OpenCV's 0-179 hue scale
+        swatch = np.uint8([[[hue, 210, 230]]])
+        bgr = cv2.cvtColor(swatch, cv2.COLOR_HSV2BGR)[0][0]
+        return tuple(int(c) for c in bgr)
+
+    def team_color_hex(self, team, fallback="#9AA5A0"):
+        bgr = self.team_color_bgr(team, fallback=None)
+        if bgr is None:
+            return fallback
+        b, g, r = bgr
+        return f"#{r:02X}{g:02X}{b:02X}"
 
     def get_player_team(self, frame, bbox, player_track_id):
         if self._kmeans is None:

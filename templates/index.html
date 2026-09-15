@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pitch:   #0D1512;
+    --surface: #15201B;
+    --line:    #24332B;
+    --chalk:   #E8EDE6;
+    --muted:   #7E9086;
+    --red:     #E23B2E;
+    --yellow:  #F5C542;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--pitch);
+    color: var(--chalk);
+    font-family: Archivo, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  button, input, select { font: inherit; color: inherit; }
+
+  :focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ---------- left rail ---------- */
+  .rail {
+    width: 290px;
+    flex: 0 0 290px;
+    border-right: 1px solid var(--line);
+    padding: 26px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+  }
+
+  .brand { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+  .brand span { color: var(--muted); font-weight: 500; display: block; font-size: 13px; letter-spacing: 0; }
+
+  .rail h2 {
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    margin: 0 0 10px; letter-spacing: 0.01em;
+  }
+
+  .runs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .runs button {
+    width: 100%; text-align: left; background: none; border: 0;
+    border-left: 2px solid transparent;
+    padding: 9px 12px; cursor: pointer; border-radius: 0 4px 4px 0;
+  }
+  .runs button:hover { background: var(--surface); }
+  .runs button[aria-current="true"] { background: var(--surface); border-left-color: var(--yellow); }
+  .runs .rname { display: block; font-weight: 500; }
+  .runs .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; }
+  .runs .rmeta { display: block; font-size: 12px; color: var(--muted); }
+
+  .empty { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* ---------- new run form ---------- */
+  .form { display: flex; flex-direction: column; gap: 11px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .field select, .field input[type=text], .field input[type=number] {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 5px; padding: 7px 9px; width: 100%;
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+
+  .go {
+    background: var(--yellow); color: #14180D; border: 0; border-radius: 5px;
+    padding: 10px; font-weight: 600; cursor: pointer;
+  }
+  .go:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+
+  /* ---------- main ---------- */
+  .main { flex: 1; padding: 34px 40px 60px; min-width: 0; }
+
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 26px; }
+  .head h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 3px; }
+  .head p { color: var(--muted); font-size: 13px; margin: 0; }
+  .del { background: none; border: 1px solid var(--line); color: var(--muted);
+         border-radius: 5px; padding: 6px 11px; cursor: pointer; font-size: 13px; }
+  .del:hover { color: var(--red); border-color: var(--red); }
+
+  /* ---------- tug of war (the hero) ---------- */
+  .tug { margin-bottom: 8px; }
+  .tugbar {
+    position: relative; height: 76px; border-radius: 6px; overflow: hidden;
+    background: var(--line); display: flex;
+  }
+  .tugbar .side { height: 100%; display: flex; align-items: center; transition: width .7s cubic-bezier(.4,0,.2,1); }
+  .tugbar .a { background: var(--red); justify-content: flex-start; padding-left: 20px; }
+  .tugbar .b { background: var(--yellow); justify-content: flex-end; padding-right: 20px; }
+  .tugbar .num { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; }
+  .tugbar .a .num { color: #FFF1EF; }
+  .tugbar .b .num { color: #1A1705; }
+  .tuglabels { display: flex; justify-content: space-between; margin-top: 9px; font-size: 13px; color: var(--muted); }
+  .tuglabels .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; }
+
+  @media (prefers-reduced-motion: reduce) { .tugbar .side { transition: none; } }
+
+  /* ---------- swing timeline ---------- */
+  .panel { margin-top: 34px; }
+  .panel h2 { font-size: 15px; font-weight: 600; margin: 0 0 3px; }
+  .panel .hint { color: var(--muted); font-size: 13px; margin: 0 0 13px; }
+  .swing { width: 100%; height: 132px; display: block; cursor: pointer; }
+  .swing rect.seg:hover { opacity: .75; }
+
+  /* ---------- stats ---------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 30px;
+           border-top: 1px solid var(--line); padding-top: 22px; }
+  .stat .v { font-size: 22px; font-weight: 600; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+
+  /* ---------- score ---------- */
+  .score { display: flex; align-items: center; gap: 13px; margin-top: 13px; }
+  .score input { width: 62px; text-align: center; background: var(--surface);
+                 border: 1px solid var(--line); border-radius: 5px; padding: 8px;
+                 font-size: 19px; font-weight: 600; }
+  .score .sep { color: var(--muted); }
+  .score .tag { font-size: 12px; color: var(--muted); }
+  .saved { font-size: 12px; color: var(--yellow); opacity: 0; transition: opacity .3s; }
+  .saved.on { opacity: 1; }
+
+  video { width: 100%; border-radius: 6px; background: #000; display: block; }
+
+  .dl { color: var(--muted); font-size: 13px; }
+  .dl a { color: var(--muted); }
+
+  /* ---------- progress ---------- */
+  .prog { border: 1px solid var(--line); border-radius: 6px; padding: 20px; }
+  .prog .bar { height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 13px 0; }
+  .prog .fill { height: 100%; background: var(--yellow); width: 0%; transition: width .4s; }
+  .prog .logs {
+    font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted);
+    max-height: 132px; overflow-y: auto; white-space: pre-wrap; margin: 0;
+  }
+
+  .placeholder { color: var(--muted); max-width: 46ch; }
+  .placeholder h1 { color: var(--chalk); font-size: 26px; font-weight: 800; margin: 0 0 9px; letter-spacing: -0.02em; }
+
+  .err { color: var(--red); }
+
+  @media (max-width: 860px) {
+    .shell { flex-direction: column; }
+    .rail { width: auto; flex: none; border-right: 0; border-bottom: 1px solid var(--line); }
+    .main { padding: 26px 20px 50px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="rail">
+    <div>
+      <h1 class="brand">Match Analyzer<span>7-a-side possession</span></h1>
+    </div>
+
+    <div>
+      <h2>New run</h2>
+      <div class="form">
+        <div class="field">
+          <label for="video">Video</label>
+          <select id="video"></select>
+        </div>
+        <div class="field">
+          <label for="label">Name this match</label>
+          <input type="text" id="label" placeholder="Reds vs Yellows">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="model">Model</label>
+            <select id="model">
+              <option value="yolov8m.pt">YOLOv8m</option>
+              <option value="yolo11m.pt">YOLO11m</option>
+              <option value="yolo11l.pt">YOLO11l</option>
+              <option value="yolo11x.pt">YOLO11x</option>
+              <option value="yolo26m.pt" selected>YOLO26m</option>
+              <option value="yolo26l.pt">YOLO26l</option>
+              <option value="yolo26x.pt">YOLO26x</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="imgsz">Detail</label>
+            <select id="imgsz">
+              <option value="640">640</option>
+              <option value="960">960</option>
+              <option value="1280" selected>1280</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="conf">Confidence</label>
+          <input type="number" id="conf" value="0.15" min="0.01" max="0.9" step="0.01">
+        </div>
+        <label class="check"><input type="checkbox" id="useroi" checked> Limit to pitch area</label>
+        <button class="go" id="go">Analyze match</button>
+      </div>
+    </div>
+
+    <div>
+      <h2>Past matches</h2>
+      <ul class="runs" id="runs"></ul>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let runs = [], current = null, polling = null;
+
+const fmtDur = s => `${Math.floor(s/60)}m ${Math.round(s%60)}s`;
+
+// Teams are whatever colours the pitch gave us, so work out readable text per kit
+const colA = r => r.color_a || '#E23B2E';
+const colB = r => r.color_b || '#F5C542';
+const ink = hex => {
+  const n = parseInt(hex.slice(1), 16);
+  const L = (0.299*(n>>16) + 0.587*(n>>8 & 255) + 0.114*(n & 255)) / 255;
+  return L > 0.6 ? '#171A10' : '#FFFFFF';
+};
+
+async function loadVideos() {
+  const r = await (await fetch('/api/videos')).json();
+  const sel = $('#video');
+  sel.innerHTML = r.videos.length
+    ? r.videos.map(v => `<option value="${v.name}">${v.name} (${v.size_mb} MB)</option>`).join('')
+    : '<option value="">No videos in input_videos/</option>';
+  $('#go').disabled = !r.videos.length;
+  if (!r.has_roi) $('#useroi').checked = false;
+}
+
+async function loadRuns() {
+  runs = await (await fetch('/api/runs')).json();
+  $('#runs').innerHTML = runs.length
+    ? runs.map(r => `<li><button data-id="${r.id}" aria-current="${current && current.id===r.id}">
+        <span class="rname"><i class="dot" style="background:${colA(r)}"></i><i class="dot" style="background:${colB(r)}"></i> ${r.label}</span>
+        <span class="rmeta">${r.possession_a ?? '–'}% / ${r.possession_b ?? '–'}% · ${fmtDur(r.duration_s)}</span>
+      </button></li>`).join('')
+    : '<p class="empty">Nothing analyzed yet.</p>';
+
+  document.querySelectorAll('.runs button').forEach(b =>
+    b.onclick = () => showRun(b.dataset.id));
+}
+
+function swingSVG(timeline, cA, cB) {
+  if (!timeline.length) return '<p class="empty">Not enough tracked play to chart.</p>';
+  const W = 1000, H = 132, mid = H/2, n = timeline.length;
+  const bw = W / n;
+  let bars = '';
+  timeline.forEach((p, i) => {
+    const x = i * bw;
+    if (p.a === null) return;
+    const d = p.a - 50;                    // >0 red on top, <0 yellow below
+    const h = Math.abs(d) / 50 * (mid - 6);
+    const y = d > 0 ? mid - h : mid;
+    const col = d > 0 ? cA : cB;
+    bars += `<rect class="seg" x="${x+0.5}" y="${y}" width="${bw-1}" height="${Math.max(h,1)}"
+              fill="${col}" data-t="${p.t}"><title>${p.t}s — ${p.a}% team A</title></rect>`;
+  });
+  return `<svg class="swing" id="swing" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${bars}<line x1="0" y1="${mid}" x2="${W}" y2="${mid}" stroke="var(--line)" stroke-width="1"/>
+  </svg>`;
+}
+
+function showRun(id) {
+  const r = runs.find(x => x.id === id);
+  if (!r) return;
+  current = r;
+  loadRuns();
+
+  const a = r.possession_a, b = r.possession_b;
+  const hasPoss = a !== null && b !== null;
+
+  $('#main').innerHTML = `
+    <div class="head">
+      <div>
+        <h1>${r.label}</h1>
+        <p>${new Date(r.created).toLocaleString()} · ${r.model} · ${fmtDur(r.duration_s)}</p>
+      </div>
+      <button class="del" id="del">Delete</button>
+    </div>
+
+    ${hasPoss ? `
+    <div class="tug">
+      <div class="tugbar">
+        <div class="side a" style="width:50%;background:${colA(r)}">
+          <span class="num" style="color:${ink(colA(r))}">${a}%</span></div>
+        <div class="side b" style="width:50%;background:${colB(r)}">
+          <span class="num" style="color:${ink(colB(r))}">${b}%</span></div>
+      </div>
+      <div class="tuglabels">
+        <span><i class="dot" style="background:${colA(r)}"></i> Team A</span>
+        <span>Team B <i class="dot" style="background:${colB(r)}"></i></span>
+      </div>
+    </div>` : `<p class="empty">The ball wasn't tracked clearly enough to split possession.</p>`}
+
+    <section class="panel">
+      <h2>How it swung</h2>
+      <p class="hint">Above the line is team A on top, below is team B. Click a bar to jump the video there.</p>
+      ${swingSVG(r.timeline, colA(r), colB(r))}
+    </section>
+
+    <section class="panel">
+      <h2>Final score</h2>
+      <p class="hint">Goals are yours to enter — the camera angle can't judge them reliably.</p>
+      <div class="score">
+        <input type="number" id="ga" min="0" value="${r.goals.a}"> <span class="sep">–</span>
+        <input type="number" id="gb" min="0" value="${r.goals.b}">
+        <span class="tag">team A / team B</span>
+        <span class="saved" id="saved">Saved</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Annotated footage</h2>
+      <p class="hint">Boxes are colour-coded by bib; the yellow dot is the ball when it's found.</p>
+      <video id="vid" controls preload="metadata" src="/media/${r.id}/annotated.mp4"></video>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><div class="v">${r.ball_rate}%</div><div class="k">frames with the ball found</div></div>
+      <div class="stat"><div class="v">${r.frames.toLocaleString()}</div><div class="k">frames analyzed</div></div>
+      <div class="stat"><div class="v">${r.contested_frames.toLocaleString()}</div><div class="k">frames with clear possession</div></div>
+      <div class="stat"><div class="v">${r.conf}</div><div class="k">confidence threshold</div></div>
+    </div>
+
+    <p class="panel dl"><a href="/media/${r.id}/possession.csv" download>Download the per-frame data (CSV)</a></p>
+  `;
+
+  // animate the tug bar from even to the real split — shows what was won
+  if (hasPoss) requestAnimationFrame(() => {
+    $('.tugbar .a').style.width = a + '%';
+    $('.tugbar .b').style.width = b + '%';
+  });
+
+  const svg = $('#swing');
+  if (svg) svg.onclick = e => {
+    const t = e.target.dataset && e.target.dataset.t;
+    if (t && $('#vid')) { $('#vid').currentTime = parseFloat(t); $('#vid').play(); }
+  };
+
+  const save = async () => {
+    const res = await fetch(`/api/runs/${r.id}/goals`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({a: +$('#ga').value || 0, b: +$('#gb').value || 0})
+    });
+    const updated = await res.json();
+    Object.assign(r, updated);
+    $('#saved').classList.add('on');
+    setTimeout(() => $('#saved').classList.remove('on'), 1200);
+  };
+  $('#ga').onchange = save;
+  $('#gb').onchange = save;
+
+  $('#del').onclick = async () => {
+    if (!confirm(`Delete "${r.label}"? This removes its video and data.`)) return;
+    await fetch(`/api/runs/${r.id}`, {method: 'DELETE'});
+    current = null;
+    await loadRuns();
+    showIdle();
+  };
+}
+
+function showIdle() {
+  if (current) return;
+  $('#main').innerHTML = `<div class="placeholder">
+    <h1>Pick a match, or analyze a new one</h1>
+    <p>Drop match footage into the <code>input_videos</code> folder, choose it on the left,
+    and this works out who had the ball. A two-minute clip takes a few minutes;
+    a full match takes hours, so start small.</p>
+  </div>`;
+}
+
+function showProgress(j) {
+  const pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+  $('#main').innerHTML = `
+    <div class="head"><div>
+      <h1>Analyzing ${j.label || ''}</h1>
+      <p>${j.done.toLocaleString()} of ${(j.total||0).toLocaleString()} frames · ball found in ${j.balls.toLocaleString()}</p>
+    </div></div>
+    <div class="prog">
+      <strong>${pct}%</strong>
+      <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+      <pre class="logs">${(j.lines||[]).join('\n')}</pre>
+    </div>`;
+}
+
+async function pollJob() {
+  const j = await (await fetch('/api/job')).json();
+
+  if (j.state === 'running') {
+    $('#go').disabled = true;
+    showProgress(j);
+    return;
+  }
+
+  if (polling) {                       // a job just finished while we watched
+    clearInterval(polling); polling = null;
+    $('#go').disabled = false;
+    await loadRuns();
+    if (j.state === 'done' && j.run_id) showRun(j.run_id);
+    if (j.state === 'error') {
+      $('#main').innerHTML = `<div class="placeholder">
+        <h1 class="err">That run didn't finish</h1><p>${j.error}</p></div>`;
+    }
+  }
+}
+
+$('#go').onclick = async () => {
+  const body = {
+    video: $('#video').value,
+    label: $('#label').value,
+    model: $('#model').value,
+    conf: parseFloat($('#conf').value),
+    imgsz: parseInt($('#imgsz').value),
+    use_roi: $('#useroi').checked,
+  };
+  const res = await fetch('/api/analyze', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) { alert((await res.json()).error); return; }
+  current = null;
+  if (!polling) polling = setInterval(pollJob, 1000);
+  pollJob();
+};
+
+(async function init() {
+  await loadVideos();
+  await loadRuns();
+  const j = await (await fetch('/api/job')).json();
+  if (j.state === 'running') { polling = setInterval(pollJob, 1000); pollJob(); }
+  else if (runs.length) showRun(runs[0].id);
+  else showIdle();
+})();
+</script>
+</body>
+</html>

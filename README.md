@@ -123,7 +123,10 @@ you press `a`/`b` to log a goal for each team as you watch, saved to a CSV.
 | `select_roi.py` | An earlier, simpler rectangle-only version of the pitch selector. Kept for reference — the polygon version is better for angled camera views. |
 | `team_assigner.py` | The hue-based color clustering logic (Step 4 above) that figures out which team each player is on. |
 | `bytetrack_custom.yaml` | Settings for the player-tracking algorithm, tuned to hold onto the same player ID longer. |
-| `main.py` | The main script — runs the whole pipeline end-to-end and produces your results. |
+| `app.py` | The web app — start this for the browser interface. |
+| `templates/index.html` | The web app's interface (all of its layout, styling, and behaviour). |
+| `analyzer.py` | The analysis pipeline itself. Both the web app and the command line use this, so there's only one copy of the logic. |
+| `main.py` | Command-line entry point — a thin wrapper around `analyzer.py`. |
 | `goal_logger.py` | The manual goal-tagging tool. |
 | `train_custom_model.py` | A script to fine-tune YOLO on a football-specific dataset instead of the generic pretrained one. **See section 6 below before using this** — in testing, this made results worse, not better, due to a mismatch between the training data and this kind of match footage. |
 
@@ -162,7 +165,42 @@ weights file (a few megabytes) — this needs an internet connection once.
 
 ---
 
-## 5. Step-by-step usage
+## 5. The app (easiest way to use this)
+
+Rather than running commands for every match, you can use the built-in web
+app — it runs the analysis, shows live progress, and keeps a browsable
+history of every match you've analyzed.
+
+```bash
+python app.py
+```
+
+Then open **http://127.0.0.1:5000** in your browser. Everything runs locally
+on your machine; nothing is uploaded anywhere.
+
+From there you can:
+- Pick any video sitting in `input_videos/` and start an analysis
+- Choose the model, detail level, and confidence without touching code
+- Watch progress while it works (a long match takes hours, so this matters)
+- See possession as a tug-of-war bar — the two teams pushing against each
+  other, meeting at the ratio they actually earned
+- See how possession swung over the match, and click any point in that
+  chart to jump the video to that moment
+- Play the annotated footage, with boxes drawn in each team's real kit colour
+- Enter the final score by hand (goals can't be detected reliably)
+- Download the raw per-frame data as CSV
+
+Each analysis is saved to its own folder under `runs/`, so results never
+overwrite each other and past matches stay available.
+
+**A note on team colours:** the app doesn't assume your teams are red and
+yellow. It works out the two kit colours from the footage itself and paints
+the whole interface — bar, chart, video boxes — in whatever those actually
+are. So blue vs white works just as well.
+
+---
+
+## 6. Step-by-step usage (command line)
 
 ### Step A — Get your match video
 
@@ -219,11 +257,14 @@ Breaking down those arguments:
 - `1280` — detection resolution (higher helps catch small/fast objects like
   the ball, at the cost of speed)
 
-This produces:
-- `output_videos/annotated.mp4` — your video with colored boxes around
-  players and a live possession % overlay
-- `stats/possession.csv` — a per-frame log of who had the ball
-- A printed summary in the terminal
+This produces a folder at `runs/<timestamp>/` containing:
+- `annotated.mp4` — your video with colored boxes around players and a live
+  possession % overlay
+- `possession.csv` — a per-frame log of who had the ball
+- `result.json` — the summary stats, which the web app reads
+
+...plus a printed summary in the terminal. Run `python app.py` to view any
+of these in the browser.
 
 ### Step E — Log goals
 
@@ -236,7 +277,7 @@ and quit. Saves to `stats/goals.csv`.
 
 ---
 
-## 6. Known limitations (and what we learned trying to fix them)
+## 7. Known limitations (and what we learned trying to fix them)
 
 Being upfront about where this stands, since a lot of debugging went into
 figuring these out:
@@ -273,7 +314,7 @@ figuring these out:
 
 ---
 
-## 7. Possible next steps (not built yet)
+## 8. Possible next steps (not built yet)
 
 - Player speed/distance covered (would need perspective transformation —
   converting pixel movement into real-world meters)
