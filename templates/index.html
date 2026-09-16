@@ -37,13 +37,14 @@
 
   /* ---------- left rail ---------- */
   .rail {
-    width: 290px;
-    flex: 0 0 290px;
+    width: 300px;
+    flex: 0 0 300px;
     border-right: 1px solid var(--line);
     padding: 26px 20px;
     display: flex;
     flex-direction: column;
-    gap: 26px;
+    gap: 24px;
+    overflow-y: auto;
   }
 
   .brand { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
@@ -68,6 +69,41 @@
 
   .empty { color: var(--muted); font-size: 13px; margin: 0; }
 
+  /* ---------- get footage in: upload + youtube ---------- */
+  .intake { display: flex; flex-direction: column; gap: 8px; }
+
+  .dropzone {
+    border: 1.5px dashed var(--line); border-radius: 6px; padding: 16px 12px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--yellow); background: var(--surface); }
+  .dropzone p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .dropzone p b { color: var(--chalk); font-weight: 600; }
+  .dropzone input[type=file] { display: none; }
+
+  .or-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+  .or-row::before, .or-row::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .yt-row { display: flex; gap: 6px; }
+  .yt-row input {
+    flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 5px; padding: 7px 9px; font-size: 13px;
+  }
+  .yt-row button {
+    background: var(--surface); border: 1px solid var(--line); color: var(--chalk);
+    border-radius: 5px; padding: 0 11px; cursor: pointer; font-size: 13px; white-space: nowrap;
+  }
+  .yt-row button:hover { border-color: var(--yellow); }
+  .yt-row button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .intake-progress {
+    font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 5px;
+  }
+  .intake-progress .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .intake-progress .fill { height: 100%; background: var(--yellow); width: 0%; transition: width .3s; }
+  .intake-progress.err { color: var(--red); }
+  .intake-progress.ok { color: var(--yellow); }
+
   /* ---------- new run form ---------- */
   .form { display: flex; flex-direction: column; gap: 11px; }
   .field { display: flex; flex-direction: column; gap: 5px; }
@@ -77,7 +113,6 @@
     border-radius: 5px; padding: 7px 9px; width: 100%;
   }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
   .go {
     background: var(--yellow); color: #14180D; border: 0; border-radius: 5px;
@@ -126,6 +161,16 @@
   .stat .k { font-size: 12px; color: var(--muted); }
 
   /* ---------- score ---------- */
+  .candidates { display: flex; flex-wrap: wrap; gap: 8px; }
+  .candidate {
+    background: var(--surface); border: 1px solid var(--line); color: var(--chalk);
+    border-radius: 5px; padding: 8px 12px; cursor: pointer; display: flex;
+    flex-direction: column; align-items: flex-start; gap: 1px; min-width: 84px;
+  }
+  .candidate:hover { border-color: var(--yellow); }
+  .candidate .ctime { font-weight: 600; font-size: 14px; }
+  .candidate .clabel { font-size: 11px; color: var(--muted); }
+
   .score { display: flex; align-items: center; gap: 13px; margin-top: 13px; }
   .score input { width: 62px; text-align: center; background: var(--surface);
                  border: 1px solid var(--line); border-radius: 5px; padding: 8px;
@@ -156,7 +201,7 @@
 
   @media (max-width: 860px) {
     .shell { flex-direction: column; }
-    .rail { width: auto; flex: none; border-right: 0; border-bottom: 1px solid var(--line); }
+    .rail { width: auto; flex: none; border-right: 0; border-bottom: 1px solid var(--line); max-height: none; }
     .main { padding: 26px 20px 50px; }
   }
 </style>
@@ -167,6 +212,22 @@
   <aside class="rail">
     <div>
       <h1 class="brand">Match Analyzer<span>7-a-side possession</span></h1>
+    </div>
+
+    <div>
+      <h2>Get footage in</h2>
+      <div class="intake">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv,.m4v">
+          <p id="dropzoneText"><b>Click to upload</b> or drag a video here</p>
+        </label>
+        <div class="or-row">or paste a link</div>
+        <div class="yt-row">
+          <input type="text" id="ytUrl" placeholder="youtube.com/watch?v=...">
+          <button id="ytGo">Fetch</button>
+        </div>
+        <div id="intakeStatus"></div>
+      </div>
     </div>
 
     <div>
@@ -184,13 +245,13 @@
           <div class="field">
             <label for="model">Model</label>
             <select id="model">
-              <option value="yolov8m.pt">YOLOv8m</option>
-              <option value="yolo11m.pt">YOLO11m</option>
-              <option value="yolo11l.pt">YOLO11l</option>
-              <option value="yolo11x.pt">YOLO11x</option>
-              <option value="yolo26m.pt" selected>YOLO26m</option>
-              <option value="yolo26l.pt">YOLO26l</option>
-              <option value="yolo26x.pt">YOLO26x</option>
+              <option value="yolov8m.pt">YOLOv8m — previous gen</option>
+              <option value="yolo11m.pt">YOLO11m — fast, very good</option>
+              <option value="yolo11l.pt">YOLO11l — slower, excellent</option>
+              <option value="yolo11x.pt">YOLO11x — slowest, likely overkill</option>
+              <option value="yolo26m.pt" selected>YOLO26m — recommended</option>
+              <option value="yolo26l.pt">YOLO26l — best accuracy</option>
+              <option value="yolo26x.pt">YOLO26x — max accuracy, very slow</option>
             </select>
           </div>
           <div class="field">
@@ -206,7 +267,6 @@
           <label for="conf">Confidence</label>
           <input type="number" id="conf" value="0.15" min="0.01" max="0.9" step="0.01">
         </div>
-        <label class="check"><input type="checkbox" id="useroi" checked> Limit to pitch area</label>
         <button class="go" id="go">Analyze match</button>
       </div>
     </div>
@@ -222,11 +282,10 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let runs = [], current = null, polling = null;
+let runs = [], current = null, polling = null, dlPolling = null;
 
 const fmtDur = s => `${Math.floor(s/60)}m ${Math.round(s%60)}s`;
 
-// Teams are whatever colours the pitch gave us, so work out readable text per kit
 const colA = r => r.color_a || '#E23B2E';
 const colB = r => r.color_b || '#F5C542';
 const ink = hex => {
@@ -235,15 +294,92 @@ const ink = hex => {
   return L > 0.6 ? '#171A10' : '#FFFFFF';
 };
 
-async function loadVideos() {
+/* ---------------- video library: list / upload / youtube ---------------- */
+
+async function loadVideos(selectName) {
   const r = await (await fetch('/api/videos')).json();
   const sel = $('#video');
   sel.innerHTML = r.videos.length
     ? r.videos.map(v => `<option value="${v.name}">${v.name} (${v.size_mb} MB)</option>`).join('')
-    : '<option value="">No videos in input_videos/</option>';
+    : '<option value="">No videos yet — upload or fetch one above</option>';
   $('#go').disabled = !r.videos.length;
-  if (!r.has_roi) $('#useroi').checked = false;
+  if (selectName) sel.value = selectName;
 }
+
+function intakeStatus(html, kind) {
+  $('#intakeStatus').innerHTML = html
+    ? `<div class="intake-progress ${kind||''}">${html}</div>` : '';
+}
+
+async function doUpload(file) {
+  if (!file) return;
+  $('#dropzoneText').innerHTML = `<b>Uploading…</b> ${file.name}`;
+  intakeStatus('Uploading — larger files take a moment.');
+  const body = new FormData();
+  body.append('file', file);
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'Upload failed.');
+    intakeStatus(`Added ${j.name}`, 'ok');
+    await loadVideos(j.name);
+  } catch (e) {
+    intakeStatus(e.message, 'err');
+  } finally {
+    $('#dropzoneText').innerHTML = '<b>Click to upload</b> or drag a video here';
+  }
+}
+
+$('#fileInput').addEventListener('change', e => doUpload(e.target.files[0]));
+
+const dz = $('#dropzone');
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.add('drag');
+}));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.classList.remove('drag');
+}));
+dz.addEventListener('drop', e => doUpload(e.dataTransfer.files[0]));
+
+async function startYtDownload() {
+  const url = $('#ytUrl').value.trim();
+  if (!url) return;
+  const res = await fetch('/api/download', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({url})
+  });
+  const j = await res.json();
+  if (!res.ok) { intakeStatus(j.error, 'err'); return; }
+  $('#ytGo').disabled = true;
+  if (!dlPolling) dlPolling = setInterval(pollDownload, 1000);
+  pollDownload();
+}
+$('#ytGo').onclick = startYtDownload;
+$('#ytUrl').addEventListener('keydown', e => { if (e.key === 'Enter') startYtDownload(); });
+
+async function pollDownload() {
+  const j = await (await fetch('/api/download/job')).json();
+  if (j.state === 'running') {
+    const speed = j.speed ? `${(j.speed/1e6).toFixed(1)} MB/s` : '';
+    const eta = j.eta ? ` · ${j.eta}s left` : '';
+    intakeStatus(`Downloading ${j.percent}%${speed ? ' · '+speed : ''}${eta}
+      <div class="bar"><div class="fill" style="width:${j.percent}%"></div></div>`);
+    return;
+  }
+  if (dlPolling) {
+    clearInterval(dlPolling); dlPolling = null;
+    $('#ytGo').disabled = false;
+    if (j.state === 'done') {
+      intakeStatus(`Added ${j.filename}`, 'ok');
+      $('#ytUrl').value = '';
+      await loadVideos(j.filename);
+    } else if (j.state === 'error') {
+      intakeStatus(j.error, 'err');
+    }
+  }
+}
+
+/* ---------------- runs list + detail ---------------- */
 
 async function loadRuns() {
   runs = await (await fetch('/api/runs')).json();
@@ -258,6 +394,20 @@ async function loadRuns() {
     b.onclick = () => showRun(b.dataset.id));
 }
 
+const fmtClock = t => `${Math.floor(t/60)}:${String(Math.round(t%60)).padStart(2,'0')}`;
+
+function goalCandidatesHTML(r) {
+  const cands = r.goal_candidates || [];
+  if (!cands.length) {
+    return '<p class="empty">Nothing flagged — either a quiet match for shots, or the ball wasn\'t tracked cleanly enough to tell.</p>';
+  }
+  return `<div class="candidates">${cands.map((c,i) => `
+    <button class="candidate" data-t="${c.t}">
+      <span class="ctime">${fmtClock(c.t)}</span>
+      <span class="clabel">Jump &amp; review</span>
+    </button>`).join('')}</div>`;
+}
+
 function swingSVG(timeline, cA, cB) {
   if (!timeline.length) return '<p class="empty">Not enough tracked play to chart.</p>';
   const W = 1000, H = 132, mid = H/2, n = timeline.length;
@@ -266,7 +416,7 @@ function swingSVG(timeline, cA, cB) {
   timeline.forEach((p, i) => {
     const x = i * bw;
     if (p.a === null) return;
-    const d = p.a - 50;                    // >0 red on top, <0 yellow below
+    const d = p.a - 50;
     const h = Math.abs(d) / 50 * (mid - 6);
     const y = d > 0 ? mid - h : mid;
     const col = d > 0 ? cA : cB;
@@ -317,6 +467,13 @@ function showRun(id) {
     </section>
 
     <section class="panel">
+      <h2>Possible goal moments</h2>
+      <p class="hint">Flagged from sudden ball speed followed by a gap in tracking — a shortcut for scrubbing,
+        not a real detector. Review each and enter the actual score below.</p>
+      ${goalCandidatesHTML(r)}
+    </section>
+
+    <section class="panel">
       <h2>Final score</h2>
       <p class="hint">Goals are yours to enter — the camera angle can't judge them reliably.</p>
       <div class="score">
@@ -343,7 +500,6 @@ function showRun(id) {
     <p class="panel dl"><a href="/media/${r.id}/possession.csv" download>Download the per-frame data (CSV)</a></p>
   `;
 
-  // animate the tug bar from even to the real split — shows what was won
   if (hasPoss) requestAnimationFrame(() => {
     $('.tugbar .a').style.width = a + '%';
     $('.tugbar .b').style.width = b + '%';
@@ -354,6 +510,12 @@ function showRun(id) {
     const t = e.target.dataset && e.target.dataset.t;
     if (t && $('#vid')) { $('#vid').currentTime = parseFloat(t); $('#vid').play(); }
   };
+
+  document.querySelectorAll('.candidate').forEach(btn => btn.onclick = () => {
+    const t = parseFloat(btn.dataset.t);
+    if ($('#vid')) { $('#vid').currentTime = Math.max(0, t - 1); $('#vid').play(); }
+    btn.scrollIntoView({block:'nearest'});
+  });
 
   const save = async () => {
     const res = await fetch(`/api/runs/${r.id}/goals`, {
@@ -381,7 +543,7 @@ function showIdle() {
   if (current) return;
   $('#main').innerHTML = `<div class="placeholder">
     <h1>Pick a match, or analyze a new one</h1>
-    <p>Drop match footage into the <code>input_videos</code> folder, choose it on the left,
+    <p>Upload footage or paste a YouTube link on the left, choose it below,
     and this works out who had the ball. A two-minute clip takes a few minutes;
     a full match takes hours, so start small.</p>
   </div>`;
@@ -410,7 +572,7 @@ async function pollJob() {
     return;
   }
 
-  if (polling) {                       // a job just finished while we watched
+  if (polling) {
     clearInterval(polling); polling = null;
     $('#go').disabled = false;
     await loadRuns();
@@ -429,7 +591,6 @@ $('#go').onclick = async () => {
     model: $('#model').value,
     conf: parseFloat($('#conf').value),
     imgsz: parseInt($('#imgsz').value),
-    use_roi: $('#useroi').checked,
   };
   const res = await fetch('/api/analyze', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -448,6 +609,9 @@ $('#go').onclick = async () => {
   if (j.state === 'running') { polling = setInterval(pollJob, 1000); pollJob(); }
   else if (runs.length) showRun(runs[0].id);
   else showIdle();
+
+  const dj = await (await fetch('/api/download/job')).json();
+  if (dj.state === 'running') { $('#ytGo').disabled = true; dlPolling = setInterval(pollDownload, 1000); pollDownload(); }
 })();
 </script>
 </body>

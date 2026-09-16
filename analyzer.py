@@ -110,6 +110,78 @@ def _build_timeline(possession_log, buckets=TIMELINE_BUCKETS):
     return out
 
 
+# ---------------------------------------------------------------------------
+# Goal-candidate heuristic
+#
+# There's no reliable way to actually detect a goal here: that normally needs
+# a fixed camera on the goal line, and this camera pans to follow the ball —
+# the exact same problem that made a static pitch-boundary mask unreliable.
+#
+# What we CAN do: flag moments where the ball moves unusually fast for THIS
+# match, then disappears from tracking shortly after — consistent with a shot
+# that went into the net, went out of play, or was followed by players
+# celebrating (which disrupts tracking). This turns "scrub the whole match"
+# into "review a handful of flagged moments" — a time-saver for manual
+# tagging, not a replacement for it. Expect false positives (a hard clearance
+# upfield) and misses (a slow, scrappy goal from a goalmouth scramble).
+# ---------------------------------------------------------------------------
+GOAL_MAX_GAP_FOR_SPEED_S = 0.6   # only compare positions this close together in time
+GOAL_MIN_SPEED_SAMPLES = 8       # need a baseline of the match's own ball movement first
+GOAL_SPEED_PERCENTILE = 90       # "fast" = faster than this % of the match's own ball movements
+GOAL_MIN_SPEED_FRAC = 0.12       # frame-diagonals/sec floor, so a jittery match doesn't flag everything
+GOAL_LOST_GAP_S = 1.2            # ball must then go undetected for at least this long
+GOAL_LOOKAHEAD_S = 2.5           # ...starting within this long after the fast movement
+GOAL_DEDUPE_WINDOW_S = 8.0       # merge candidates this close together in time
+GOAL_MAX_CANDIDATES = 15
+
+
+def _detect_goal_candidates(ball_track, frame_w, frame_h):
+    """ball_track: [(time_s, x, y)] with x=y=None on frames the ball wasn't
+    found, in time order. Returns candidate moments worth a manual look."""
+    diag = (frame_w ** 2 + frame_h ** 2) ** 0.5 or 1
+    detected = [(t, x, y) for t, x, y in ball_track if x is not None]
+    if len(detected) < GOAL_MIN_SPEED_SAMPLES:
+        return []
+
+    speeds = []  # (time_of_later_point, speed_as_fraction_of_frame_diagonal_per_sec)
+    for (t0, x0, y0), (t1, x1, y1) in zip(detected, detected[1:]):
+        dt = t1 - t0
+        if dt <= 0 or dt > GOAL_MAX_GAP_FOR_SPEED_S:
+            continue
+        dist = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+        speeds.append((t1, (dist / diag) / dt))
+
+    if len(speeds) < GOAL_MIN_SPEED_SAMPLES:
+        return []
+
+    threshold = max(np.percentile([s for _, s in speeds], GOAL_SPEED_PERCENTILE),
+                     GOAL_MIN_SPEED_FRAC)
+    fast_moments = [t for t, s in speeds if s >= threshold]
+
+    candidates = []
+    for t in fast_moments:
+        after = [d[0] for d in detected if d[0] > t]
+        if not after:
+            continue
+        nxt = after[0]
+        if nxt - t >= GOAL_LOST_GAP_S:
+            candidates.append(t)
+            continue
+        idx = next(i for i, d in enumerate(detected) if d[0] == nxt)
+        for (ta, _, _), (tb, _, _) in zip(detected[idx:], detected[idx + 1:]):
+            if tb - ta >= GOAL_LOST_GAP_S and tb <= t + GOAL_LOOKAHEAD_S + GOAL_LOST_GAP_S:
+                candidates.append(t)
+                break
+
+    candidates.sort()
+    deduped = []
+    for t in candidates:
+        if not deduped or t - deduped[-1] >= GOAL_DEDUPE_WINDOW_S:
+            deduped.append(t)
+
+    return [{"t": round(t, 1)} for t in deduped[:GOAL_MAX_CANDIDATES]]
+
+
 def _transcode_for_browser(src, dst, log=print):
     """OpenCV writes mp4v, which many browsers refuse to play. If ffmpeg is
     available, re-encode to H.264 so the video works in the web player.
@@ -227,8 +299,10 @@ def run_analysis(video_path, model_name="yolo26m.pt", conf=0.15, imgsz=1280,
             teams_initialized = team_assigner.try_finalize_teams(frame_num, fallback_at)
 
         possessing_team = 0
+        ball_xy = (None, None)
         if ball_box is not None:
             ball_center = bbox_center(ball_box)
+            ball_xy = (round(float(ball_center[0]), 1), round(float(ball_center[1]), 1))
             best_dist = None
             best_team = None
 
@@ -265,6 +339,8 @@ def run_analysis(video_path, model_name="yolo26m.pt", conf=0.15, imgsz=1280,
             "frame": frame_num,
             "time_s": round(frame_num / fps, 2),
             "team": possessing_team,
+            "ball_x": ball_xy[0],
+            "ball_y": ball_xy[1],
         })
 
         if possessing_team in (1, 2):
@@ -294,6 +370,11 @@ def run_analysis(video_path, model_name="yolo26m.pt", conf=0.15, imgsz=1280,
 
     _transcode_for_browser(raw_video, os.path.join(run_dir, "annotated.mp4"), log=log)
 
+    ball_track = [(r["time_s"], r["ball_x"], r["ball_y"]) for r in possession_log]
+    goal_candidates = _detect_goal_candidates(ball_track, out_w, out_h)
+    if goal_candidates:
+        log(f"Flagged {len(goal_candidates)} moment(s) worth checking for a goal.")
+
     held = df[df["team"] != 0] if len(df) else df
     result = {
         "id": run_id,
@@ -314,6 +395,7 @@ def run_analysis(video_path, model_name="yolo26m.pt", conf=0.15, imgsz=1280,
         "color_a": team_assigner.team_color_hex(1),
         "color_b": team_assigner.team_color_hex(2),
         "timeline": _build_timeline(possession_log),
+        "goal_candidates": goal_candidates,
         "goals": {"a": 0, "b": 0},
     }
 
