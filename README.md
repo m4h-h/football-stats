@@ -104,11 +104,22 @@ player doesn't get credited). That player's team is counted as "in
 possession" for that frame. Possession % is just: (frames team A had the
 ball) ÷ (total frames where anyone clearly had the ball).
 
-### Step 6 — Goal logging (manual)
+### Step 6 — Goal logging (manual, with an assist)
 Automatically detecting goals reliably needs a fixed camera looking straight
-at the goal line — with a single moving match camera, it's not reliable
-enough to trust. So `goal_logger.py` gives you a simple video player where
-you press `a`/`b` to log a goal for each team as you watch, saved to a CSV.
+at the goal line — with a single moving match camera that pans to follow the
+ball, that's not reliable enough to trust, for the same reason a static pitch
+boundary doesn't stay aligned (see the panning-camera note in section 7). So
+the final score is something you enter yourself, in the web app.
+
+To make that less tedious than scrubbing the whole match, the pipeline also
+flags "possible goal" moments — instances where the ball moves unusually
+fast and then disappears from tracking shortly after (consistent with a shot
+that went in, went out of play, or was followed by a celebration). These show
+up as clickable timestamps under the video in the web app, so you can jump
+straight to each one, confirm or dismiss it, and then enter the real score.
+Expect some false positives (a hard clearance can look the same) and some
+misses (a scrappy, low-speed goal from a goalmouth scramble won't trigger
+it) — it's a shortcut for review, not a substitute for it.
 
 ---
 
@@ -127,7 +138,6 @@ you press `a`/`b` to log a goal for each team as you watch, saved to a CSV.
 | `templates/index.html` | The web app's interface (all of its layout, styling, and behaviour). |
 | `analyzer.py` | The analysis pipeline itself. Both the web app and the command line use this, so there's only one copy of the logic. |
 | `main.py` | Command-line entry point — a thin wrapper around `analyzer.py`. |
-| `goal_logger.py` | The manual goal-tagging tool. |
 | `train_custom_model.py` | A script to fine-tune YOLO on a football-specific dataset instead of the generic pretrained one. **See section 6 below before using this** — in testing, this made results worse, not better, due to a mismatch between the training data and this kind of match footage. |
 
 ---
@@ -243,14 +253,16 @@ anytime to go back to analyzing the full frame.
 ### Step D — Run the analysis
 
 ```bash
-python -u main.py "input_videos/test_clip.mp4" yolov8s.pt 0.15 1280
+python -u main.py "input_videos/test_clip.mp4" yolo26m.pt 0.15 1280
 ```
 
 Breaking down those arguments:
 - `"input_videos/test_clip.mp4"` — your video file
-- `yolov8s.pt` — which YOLO model to use (`yolov8n.pt` is faster but less
-  accurate; `yolov8s.pt` is a good balance; `yolov8m.pt` is slower but more
-  accurate again)
+- `yolo26m.pt` — which YOLO model to use. Roughly, in increasing accuracy
+  (and decreasing speed): `yolov8m.pt` (previous generation) →
+  `yolo11m.pt`/`yolo11l.pt` → `yolo26m.pt` (recommended starting point,
+  particularly good at small objects like the ball) → `yolo26l.pt`/`yolo26x.pt`
+  for maximum accuracy
 - `0.15` — confidence threshold (how sure the AI needs to be before it
   counts something as a detection — lower catches more, including more
   false positives)
@@ -266,14 +278,12 @@ This produces a folder at `runs/<timestamp>/` containing:
 ...plus a printed summary in the terminal. Run `python app.py` to view any
 of these in the browser.
 
-### Step E — Log goals
+### Step E — Enter the score
 
-```bash
-python goal_logger.py "input_videos/test_clip.mp4"
-```
-A video window opens. Press `a` for a Team A goal, `b` for Team B, `space`
-to pause/resume, `,`/`.` to step frame-by-frame while paused, `q` to save
-and quit. Saves to `stats/goals.csv`.
+Open the run in the web app (`python app.py`) and check the "Possible goal
+moments" section under the video — click any flagged timestamp to jump the
+player there and confirm or dismiss it. Then type the actual final score
+into the two boxes underneath; it saves automatically as you edit it.
 
 ---
 
